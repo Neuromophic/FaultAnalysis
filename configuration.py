@@ -99,9 +99,9 @@ parser.add_argument('--K_test',                type=int,       default=1,       
 parser.add_argument('--t_test_max',            type=int,       default=1,                     help='test time interval')
 parser.add_argument('--integration',           type=str,       default='MC',                  help='method for integration: Monte-Carlo, Gaussian Quadrature')
 # variation-related hyperparameters
-parser.add_argument('--N_train',               type=int,       default=20,                    help='number of sampling for variation during training')
+parser.add_argument('--N_train',               type=int,       default=100,                   help='number of sampling for variation during training')
 parser.add_argument('--e_train',               type=float,     default=0.1,                   help='variation during training')
-parser.add_argument('--N_test',                type=int,       default=20,                    help='number of sampling for variation for testing')
+parser.add_argument('--N_test',                type=int,       default=100,                   help='number of sampling for variation for testing')
 parser.add_argument('--e_test',                type=int,       default=0.1,                   help='variation for testing')
 # power
 parser.add_argument('--powerestimator',        type=str,       default='none',                help='the penalty term for encouraging lower energy')

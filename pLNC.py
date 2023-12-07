@@ -34,6 +34,27 @@ class InvRT(torch.nn.Module):
         self.pow_Y_max = package['Y_max'].to(self.DEVICE)
         self.pow_Y_min = package['Y_min'].to(self.DEVICE)
 
+        self.eta_fault = torch.tensor([[ 8.3907e-01, -1.0000e+00,  0.0000e+00,  2.0978e-17],
+                                       [-6.0647e-01, -1.0000e+00,  0.0000e+00,  1.0867e-08],
+                                       [-9.9992e-01, -1.0000e+00,  0.0000e+00, -4.5596e-18],
+                                       [ 8.3907e-01, -1.0000e+00,  0.0000e+00, -1.8533e-17],
+                                       [ 3.1485e+01,  2.8551e-03, -9.9980e-02,  6.3016e+00],
+                                       [-1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4070e-16],
+                                       [ 1.8307e+02, -1.8394e+02, -8.3575e+01,  4.2966e-02],
+                                       [-6.0647e-01, -1.0000e+00,  0.0000e+00,  1.0867e-08],
+                                       [ 1.2159e-01, -7.3578e-01, -7.9441e-02,  3.1090e+00],
+                                       [ 8.3907e-01, -1.0000e+00,  0.0000e+00,  2.0978e-17],
+                                       [-9.9992e-01, -1.0000e+00,  0.0000e+00, -4.5596e-18],
+                                       [ 7.6517e-01, -8.0291e-03,  6.3714e-01,  1.2184e+00],
+                                       [ 8.3907e-01, -1.0000e+00,  0.0000e+00,  2.0978e-17],
+                                       [ 8.3907e-01, -1.0000e+00,  0.0000e+00, -1.8533e-17],
+                                       [-1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4070e-16],
+                                       [ 1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4982e-16],
+                                       [-4.5913e-02, -7.2633e-01,  7.3493e-02,  1.0507e+01],
+                                       [-9.9992e-01, -1.0000e+00,  0.0000e+00, -4.5596e-18]]).to(self.DEVICE)
+
+        self.Mask = None
+
     @property
     def DEVICE(self):
         return self.args.DEVICE
@@ -77,12 +98,22 @@ class InvRT(torch.nn.Module):
         power = power_n * (self.pow_Y_max - self.pow_Y_min) + self.pow_Y_min
         return power.mean()
 
-    def forward(self, z):
-        eta_noisy = self.eta
+    def forward_temp(self, eta, z):
         a = torch.zeros_like(z)
         for i in range(self.N):
-            a[i,:,:] = - (self.eta[i,0] + self.eta[i,1] * torch.tanh((z[i,:,:] - self.eta[i,2]) * self.eta[i,3]))
+            a[i,:,:] = -(eta[i,0] + eta[i,1] * torch.tanh((z[i,:,:] - eta[i,2]) * eta[i,3]))
         return a
+    
+    def forward(self, z):
+        result = [self.forward_temp(self.eta, z)]
+
+        for fault in range(self.eta_fault.shape[0]):
+            eta_temp = self.eta_fault[fault,:].repeat(self.N, 1)
+            result.append(self.forward_temp(eta_temp, z))
+
+        output = torch.stack(result)
+        slices = [output[int(self.Mask[i]), :, :, i] for i in range(len(self.Mask))]
+        return torch.stack(slices, dim=2)
     
     def UpdateArgs(self, args):
         self.args = args
@@ -122,6 +153,21 @@ class TanhRT(torch.nn.Module):
         self.pow_X_min = package['X_min'].to(self.DEVICE)
         self.pow_Y_max = package['Y_max'].to(self.DEVICE)
         self.pow_Y_min = package['Y_min'].to(self.DEVICE)
+
+        self.eta_fault = torch.tensor([[ 9.9997e-01, -1.0000e+00,  0.0000e+00,  9.1182e-18],
+                                       [-5.5856e-01, -1.0000e+00,  0.0000e+00, -3.7472e-10],
+                                       [-1.6919e+01,  1.4562e+01,  8.6479e-02,  8.2578e+01],
+                                       [ 1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4982e-16],
+                                       [ 1.6839e+00, -2.2404e+00, -2.5173e+00,  1.1147e+00],
+                                       [-5.5856e-01, -1.0000e+00,  0.0000e+00, -3.7472e-10],
+                                       [ 9.9997e-01, -1.0000e+00,  0.0000e+00,  9.1182e-18],
+                                       [ 2.3198e-01, -7.8334e-01, -4.1194e-01,  3.4699e+00],
+                                       [ 1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4982e-16],
+                                       [ 9.9997e-01, -1.0000e+00,  0.0000e+00,  9.1182e-18],
+                                       [-2.4548e-01, -2.3790e-02,  8.1499e-01,  1.5337e+00],
+                                       [-1.0000e+00, -1.0000e+00,  0.0000e+00,  4.4070e-16]]).to(self.DEVICE)
+        
+        self.Mask = None
 
     @property
     def DEVICE(self):
@@ -165,12 +211,22 @@ class TanhRT(torch.nn.Module):
         power = power_n * (self.pow_Y_max - self.pow_Y_min) + self.pow_Y_min
         return power.mean()
 
-    def forward(self, z):
-        eta_noisy = self.eta
+    def forward_temp(self, eta, z):
         a = torch.zeros_like(z)
         for i in range(self.N):
-            a[i,:,:] = self.eta[i,0] + self.eta[i,1] * torch.tanh((z[i,:,:] - self.eta[i,2]) * self.eta[i,3])
+            a[i,:,:] = eta[i,0] + eta[i,1] * torch.tanh((z[i,:,:] - eta[i,2]) * eta[i,3])
         return a
+    
+    def forward(self, z):
+        result = [self.forward_temp(self.eta, z)]
+
+        for fault in range(self.eta_fault.shape[0]):
+            eta_temp = self.eta_fault[fault,:].repeat(self.N, 1)
+            result.append(self.forward_temp(eta_temp, z))
+
+        output = torch.stack(result)
+        slices = [output[int(self.Mask[i]), :, :, i] for i in range(len(self.Mask))]
+        return torch.stack(slices, dim=2)
     
     def UpdateArgs(self, args):
         self.args = args
