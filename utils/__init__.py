@@ -53,6 +53,8 @@ def FormulateArgs(args):
     args.DEVICE = CheckDevice(args)
     if args.e_train == 0.:
         args.N_train = 1
+    if args.e_test == 0.:
+        args.N_test = 1
     if args.MODE=='nominal':
         args.M_train = 1
         args.K_train = 1

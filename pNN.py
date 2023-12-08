@@ -67,8 +67,6 @@ class pLayer(torch.nn.Module):
         a_extend = torch.cat([a, ones_tensor, zeros_tensor], dim=2)
 
         self.INV.Mask = self.FaultMaskNEG
-        print(a_extend.shape)
-        print(self.INV.Mask.shape)
         a_neg = self.INV(a_extend)
         a_neg[:, :, -1] = torch.tensor(0.).to(self.device)
 

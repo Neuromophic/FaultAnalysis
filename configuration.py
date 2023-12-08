@@ -102,7 +102,7 @@ parser.add_argument('--integration',           type=str,       default='MC',    
 parser.add_argument('--N_train',               type=int,       default=100,                   help='number of sampling for variation during training')
 parser.add_argument('--e_train',               type=float,     default=0.1,                   help='variation during training')
 parser.add_argument('--N_test',                type=int,       default=100,                   help='number of sampling for variation for testing')
-parser.add_argument('--e_test',                type=int,       default=0.1,                   help='variation for testing')
+parser.add_argument('--e_test',                type=float,     default=0.1,                   help='variation for testing')
 # power
 parser.add_argument('--powerestimator',        type=str,       default='none',                help='the penalty term for encouraging lower energy')
 parser.add_argument('--powerbalance',          type=float,     default=0.,                    help='the scaling term for energy vs. accuracy')
@@ -116,7 +116,7 @@ parser.add_argument('--area_act',              type=float,     default=30.,     
 parser.add_argument('--area_neg',              type=float,     default=22.7,                  help='area of a single printed neg circuit mm^2')
 
 # circuit learnability
-parser.add_argument('--lnc',                   type=str2bool,  default=True,                  help='learnable nonlinear components')
+parser.add_argument('--lnc',                   type=str2bool,  default=False,                  help='learnable nonlinear components')
 
 # log-file-related information
 parser.add_argument('--projectname',           type=str,       default='project',             help='name of the project')
