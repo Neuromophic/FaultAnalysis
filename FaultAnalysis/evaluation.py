@@ -24,8 +24,8 @@ for x,y in test_loader:
 
 if not os.path.exists(f"./evaluation/result_data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_eTrain_{args.e_train}_eTest{args.e_test}.matrix"):
 
-    FAULTS = [0, 1, 2, 4]
-    N_Faults = 100
+    FAULTS = [0, 1, 2, 4, 8, 16]
+    N_Faults = 500
     
     results = torch.zeros([len(FAULTS), N_Faults, 6])
     
@@ -36,19 +36,20 @@ if not os.path.exists(f"./evaluation/result_data_{args.DATASET:02d}_{datainfo['d
     model.UpdateArgs(args)
     
     model.UpdateVariation(args.N_test, args.e_test)
+
+    SetSeed(args.SEED)
     
     for f, fault in enumerate(FAULTS):
         for faultsample in range(N_Faults):
-            print(fault, faultsample)
-            SetSeed(args.SEED)
     
             model.RemoveFault()
             model.SampleFault(fault)
-            
-            result_valid = evaluator(model, X_valid, y_valid)
-            valid_acc, _, valid_power, valid_area = result_valid['acc'], result_valid['std'], result_valid['power'], result_valid['area']
-            result_test  = evaluator(model, X_test,  y_test)
-            test_acc, _, test_power, test_area = result_test['acc'], result_test['std'], result_test['power'], result_test['area']
+
+            with torch.no_grad():
+                result_valid = evaluator(model, X_valid, y_valid)
+                valid_acc, _, valid_power, valid_area = result_valid['acc'], result_valid['std'], result_valid['power'], result_valid['area']
+                result_test  = evaluator(model, X_test,  y_test)
+                test_acc, _, test_power, test_area = result_test['acc'], result_test['std'], result_test['power'], result_test['area']
     
             results[f, faultsample, 0] = valid_acc
             results[f, faultsample, 1] = valid_power
