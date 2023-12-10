@@ -71,7 +71,7 @@ parser.add_argument('--N_time',                type=int,       default=32,      
 # regularization
 parser.add_argument('--pathnorm',              type=str2bool,  default=False,                 help='path-norm as regularization for improving robustness against input noise')
 # network-related
-parser.add_argument('--hidden',                type=list,      default=[5],                   help='topology of the hidden layers')
+parser.add_argument('--hidden',                type=list,      default=[3],                   help='topology of the hidden layers')
 parser.add_argument('--skipconnection',        type=str2bool,  default=False,                 help='whether there are skip connections in the network')
 # training-related
 parser.add_argument('--SEED',                  type=int,       default=0,                     help='random seed')
@@ -103,6 +103,9 @@ parser.add_argument('--N_train',               type=int,       default=100,     
 parser.add_argument('--e_train',               type=float,     default=0.1,                   help='variation during training')
 parser.add_argument('--N_test',                type=int,       default=100,                   help='number of sampling for variation for testing')
 parser.add_argument('--e_test',                type=float,     default=0.1,                   help='variation for testing')
+# fault-related hyperparameters
+parser.add_argument('--e_fault',               type=int,       default=0,                     help='number of fault ')
+parser.add_argument('--N_fault',               type=int,       default=50,                    help='number of random faults sampled during training')
 # power
 parser.add_argument('--powerestimator',        type=str,       default='none',                help='the penalty term for encouraging lower energy')
 parser.add_argument('--powerbalance',          type=float,     default=0.,                    help='the scaling term for energy vs. accuracy')

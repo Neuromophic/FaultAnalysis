@@ -14,6 +14,8 @@ class pLayer(torch.nn.Module):
         self.args = args
         self.N = args.N_train
         self.epsilon = args.e_train
+        self.N_fault = args.N_fault
+
         # define nonlinear circuits
         self.ACT = ACT
         self.INV = INV
@@ -26,9 +28,10 @@ class pLayer(torch.nn.Module):
             (torch.sum(theta[:-2, :], axis=0)+theta[-1, :])
         self.theta_ = torch.nn.Parameter(theta, requires_grad=True)
 
-        self.FaultMask = torch.ones_like(self.theta_)
-        self.FaultMaskACT = torch.zeros(n_out)
-        self.FaultMaskNEG = torch.zeros(n_in+2)
+        self.FaultMask = torch.ones_like(
+            self.theta_).repeat(self.N_fault, 1, 1)
+        self.FaultMaskACT = torch.zeros(n_out).repeat(self.N_fault, 1, 1)
+        self.FaultMaskNEG = torch.zeros(n_in+2).repeat(self.N_fault, 1, 1)
 
     @property
     def device(self):
@@ -43,15 +46,16 @@ class pLayer(torch.nn.Module):
 
     @property
     def theta_noisy(self):
-        theta_fault = self.theta * self.FaultMask
-        mean = theta_fault.repeat(self.N, 1, 1)
+        theta_fault = self.theta
+        mean = theta_fault.repeat(self.N_fault, self.N, 1, 1)
         nosie = ((torch.rand(mean.shape) * 2.) - 1.) * self.epsilon + 1.
-        return mean * nosie
+        fault_mask = self.FaultMask.repeat(self.N, 1, 1, 1).permute(1, 0, 2, 3)
+        return mean * nosie * fault_mask
 
     @property
     def W(self):
         # to deal with case that the whole colume of theta is 0
-        G = torch.sum(self.theta_noisy.abs(), axis=1, keepdim=True)
+        G = torch.sum(self.theta_noisy.abs(), axis=2, keepdim=True)
         W = self.theta_noisy.abs() / (G + 1e-10)
         return W.to(self.device)
 
@@ -62,13 +66,13 @@ class pLayer(torch.nn.Module):
         positive[positive < 0] = 0.
         negative = 1. - positive
 
-        ones_tensor = torch.ones([a.shape[0], a.shape[1], 1]).to(self.device)
+        ones_tensor = torch.ones([a.shape[0], a.shape[1], a.shape[2], 1]).to(self.device)
         zeros_tensor = torch.zeros_like(ones_tensor).to(self.device)
-        a_extend = torch.cat([a, ones_tensor, zeros_tensor], dim=2)
+        a_extend = torch.cat([a, ones_tensor, zeros_tensor], dim=3)
 
         self.INV.Mask = self.FaultMaskNEG
         a_neg = self.INV(a_extend)
-        a_neg[:, :, -1] = torch.tensor(0.).to(self.device)
+        a_neg[:, :, :, -1] = torch.tensor(0.).to(self.device)
 
         z = torch.matmul(a_extend, self.W * positive) + \
             torch.matmul(a_neg, self.W * negative)
@@ -92,18 +96,18 @@ class pLayer(torch.nn.Module):
 
     def MAC_power(self, x, y):
         x_extend = torch.cat([x,
-                              torch.ones([x.shape[0], x.shape[1], 1]).to(
-                                  self.device),
-                              torch.zeros([x.shape[0], x.shape[1], 1]).to(self.device)], dim=2)
-        
+                              torch.ones([x.shape[0], x.shape[1], x.shape[2], 1]).to(self.device),
+                              torch.zeros([x.shape[0], x.shape[1], x.shape[2], 1]).to(self.device)], dim=3)
+
         self.INV.Mask = self.FaultMaskNEG
         x_neg = self.INV(x_extend)
-        x_neg[:, :, -1] = 0.
+        x_neg[:, :, :, -1] = 0.
 
-        V = x_extend.shape[0]
-        E = x_extend.shape[1]
-        M = x_extend.shape[2]
-        N = y.shape[2]
+        F = x_extend.shape[0]
+        V = x_extend.shape[1]
+        E = x_extend.shape[2]
+        M = x_extend.shape[3]
+        N = y.shape[3]
 
         positive = self.theta_noisy.clone().detach().to(self.device)
         positive[positive >= 0] = 1.
@@ -111,13 +115,12 @@ class pLayer(torch.nn.Module):
         negative = 1. - positive
 
         Power = torch.tensor(0.).to(self.device)
-
-        for v in range(V):
-            for m in range(M):
-                for n in range(N):
-                    Power += self.g_tilde[m, n] * (
-                        (x_extend[v, :, m]*positive[v, m, n]+x_neg[v, :, m]*negative[v, m, n])-y[v, :, n]).pow(2.).sum()
-        Power = Power / E / V
+        for f in range(F):
+            for v in range(V):
+                for m in range(M):
+                    for n in range(N):
+                        Power += self.g_tilde[m, n] * ((x_extend[f, v, :, m]*positive[f,v, m, n]+x_neg[f, v, :, m]*negative[f,v, m, n])-y[f, v, :, n]).pow(2.).sum()
+        Power = Power / E / V / F
         return Power
 
     @property
@@ -162,14 +165,14 @@ class pLayer(torch.nn.Module):
     def DeviceCount(self):
         return self.soft_num_theta + self.soft_num_act * 4 + self.soft_num_neg * 6
 
-    def MakeFault(self, N_fault):
+    def MakeFaultSample(self, e_fault):
         TotalDeviceCount = [self.soft_num_theta.item(
         ), self.soft_num_act.item() * 4, self.soft_num_neg.item() * 6]
         indices = list(range(len(TotalDeviceCount)))
         total = sum(TotalDeviceCount)
         probabilities = [num / total for num in TotalDeviceCount]
         fault_sample = random.choices(
-            indices, weights=probabilities, k=N_fault)
+            indices, weights=probabilities, k=e_fault)
 
         values = [0, 1, 2]
         counts = [fault_sample.count(value) for value in values]
@@ -181,20 +184,41 @@ class pLayer(torch.nn.Module):
         counts[1] = counts[1] - N_adjust_act
         counts[2] = counts[2] - N_adjust_neg
 
-        flattened_mask = self.FaultMask.flatten()
+        # flattened_mask = self.FaultMask.flatten()
+        flattened_mask = torch.ones(
+            self.FaultMask.shape[1] * self.FaultMask.shape[2]).flatten()
         indices_to_modify = torch.randperm(flattened_mask.numel())[:counts[0]]
         for idx in indices_to_modify:
             flattened_mask[idx] = torch.tensor(
                 10.**10. if torch.rand(1).item() > 0.5 else 0., dtype=torch.int64)
-        self.FaultMask = flattened_mask.reshape(self.FaultMask.shape)
+        FaultMask = flattened_mask.reshape(
+            self.FaultMask.shape[1], self.FaultMask.shape[2])
 
+        FaultMaskACT = torch.zeros(self.theta_.shape[1])
         fault_act = torch.randperm(self.theta_.shape[1])[:counts[1]]
         for i in fault_act:
-            self.FaultMaskACT[i] = torch.randint(1, self.ACT.eta_fault.shape[0]+1, (1,)).item()
-        
-        fault_neg = torch.randperm(self.theta_.shape[0]-2)[:counts[2]]
+            FaultMaskACT[i] = torch.randint(
+                1, self.ACT.eta_fault.shape[0]+1, (1,)).item()
+
+        FaultMaskNEG = torch.zeros(self.theta_.shape[0])
+        fault_neg = torch.randperm(self.theta_.shape[0])[:counts[2]]
         for i in fault_neg:
-            self.FaultMaskNEG[i] = torch.randint(1, self.INV.eta_fault.shape[0]+1, (1,)).item()
+            FaultMaskNEG[i] = torch.randint(
+                1, self.INV.eta_fault.shape[0]+1, (1,)).item()
+
+        return FaultMask, FaultMaskACT, FaultMaskNEG
+
+    def MakeFault(self, e_fault):
+        FaultMask, FaultMaskACT, FaultMaskNEG = [], [], []
+        for i in range(self.N_fault):
+            faultmask, faultmaskact, faultmaskneg = self.MakeFaultSample(
+                e_fault)
+            FaultMask.append(faultmask)
+            FaultMaskACT.append(faultmaskact)
+            FaultMaskNEG.append(faultmaskneg)
+        self.FaultMask = torch.stack(FaultMask)
+        self.FaultMaskACT = torch.stack(FaultMaskACT)
+        self.FaultMaskNEG = torch.stack(FaultMaskNEG)
 
     def RemoveFault(self):
         self.FaultMask = torch.ones_like(self.FaultMask)
@@ -222,6 +246,8 @@ class pNN(torch.nn.Module):
         self.args = args
         self.N = args.N_train
         self.epsilon = args.e_train
+        self.e_fault = args.e_fault
+        self.N_fault = args.N_fault
 
         # define nonlinear circuits
         self.act = TanhRT(args)
@@ -238,7 +264,9 @@ class pNN(torch.nn.Module):
                 f'{i}-th Layer', pLayer(topology[i], topology[i+1], args, self.act, self.inv))
 
     def forward(self, x):
-        x = x.repeat(self.N, 1, 1)
+        self.RemoveFault()
+        self.SampleFault()
+        x = x.repeat(self.N_fault, self.N, 1, 1)
         return self.model(x)
 
     @property
@@ -298,8 +326,8 @@ class pNN(torch.nn.Module):
             if hasattr(l, 'RemoveFault'):
                 l.RemoveFault()
 
-    def SampleFault(self, N_fault):
-        if N_fault == 0:
+    def SampleFault(self):
+        if self.e_fault == 0:
             self.RemoveFault()
             return
         else:
@@ -311,12 +339,12 @@ class pNN(torch.nn.Module):
             total = sum(TotalDeviceCount)
             probabilities = [num / total for num in TotalDeviceCount]
             fault_sample = random.choices(
-                indices, weights=probabilities, k=N_fault)
+                indices, weights=probabilities, k=self.e_fault)
 
             value_counts = torch.tensor(fault_sample).bincount(minlength=1)
             values = [i for i, count in enumerate(value_counts) if count > 0]
             counts = [count.item() for count in value_counts if count > 0]
-            
+
             for l, n in zip(values, counts):
                 self.model[l].MakeFault(n)
 
@@ -349,6 +377,12 @@ class pNN(torch.nn.Module):
             if hasattr(layer, 'UpdateVariation'):
                 layer.UpdateVariation(N, epsilon)
 
+    def UpdateFault(self, e_fault, N_fault):
+        self.e_fault = e_fault
+        self.N_fault = N_fault
+        for layer in self.model:
+            layer.N_fault = N_fault
+
 
 # ================================================================================================================================================
 # =============================================================  pNN Loss function  ==============================================================
@@ -375,13 +409,15 @@ class pNNLoss(torch.nn.Module):
         return fn(prediction, label)
 
     def forward(self, y, label):
-        N = y.shape[0]
+        F = y.shape[0]
+        N = y.shape[1]
         loss = torch.tensor(0.).to(self.args.DEVICE)
         if self.args.metric == 'acc':
-            for n in range(N):
-                loss += self.CELoss(y[n, :, :], label)
+            for f in range(F):
+                for n in range(N):
+                    loss += self.CELoss(y[f, n, :, :], label)
         elif self.args.metric == 'maa':
-            for n in range(N):
-                loss += self.standard(y[n, :, :], label)
-
+            for f in range(F):
+                for n in range(N):
+                    loss += self.standard(y[f, n, :, :], label)
         return loss / N

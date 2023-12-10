@@ -33,10 +33,12 @@ class Evaluator(torch.nn.Module):
             self.performance = self.norminal_snn
         
         prediction = nn(x)
-        N = prediction.shape[0]
+        F = prediction.shape[0]
+        N = prediction.shape[1]
         acc = []
-        for n in range(N):
-            acc.append(self.performance(prediction[n,:,:], label))
+        for f in range(F):
+            for n in range(N):
+                acc.append(self.performance(prediction[f,n,:,:], label))
         accuracy = np.mean(acc)
         std = np.std(acc)
         return {'acc':accuracy, 'std':std, 'power':nn.Power, 'area':nn.Area}

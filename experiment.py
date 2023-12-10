@@ -21,7 +21,7 @@ pprint.pprint(datainfo)
 
 SetSeed(args.SEED)
 
-setup = f"data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon:{args.e_train}.model"
+setup = f"data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_faults_{args.e_fault:1d}.model"
 print(f'Training setup: {setup}.')
 
 msglogger = GetMessageLogger(args, setup)
@@ -53,3 +53,5 @@ else:
         msglogger.info('Training if finished.')
     else:
         msglogger.warning('Time out, further training is necessary.')
+
+CloseLogger(msglogger)

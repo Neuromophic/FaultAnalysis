@@ -11,6 +11,8 @@ class InvRT(torch.nn.Module):
         self.args = args
         self.N = args.N_train
         self.epsilon = args.e_train
+        args.N_fault = args.N_fault
+
         # R1, R2, R3, W1, L1, W2, L2, W3, L3
         self.rt_ = torch.nn.Parameter(torch.tensor([args.NEG_R1n, args.NEG_R2n, args.NEG_R3n, args.NEG_W1n, args.NEG_L1n, args.NEG_W2n, args.NEG_L2n, args.NEG_W3n, args.NEG_L3n]).to(args.DEVICE), requires_grad=True)
         # model
@@ -98,22 +100,28 @@ class InvRT(torch.nn.Module):
         power = power_n * (self.pow_Y_max - self.pow_Y_min) + self.pow_Y_min
         return power.mean()
 
-    def forward_temp(self, eta, z):
+    def output_variation(self, eta, z):
         a = torch.zeros_like(z)
         for i in range(self.N):
             a[i,:,:] = -(eta[i,0] + eta[i,1] * torch.tanh((z[i,:,:] - eta[i,2]) * eta[i,3]))
         return a
     
-    def forward(self, z):
-        result = [self.forward_temp(self.eta, z)]
+    def output_faults(self, z, mask):
+        result = [self.output_variation(self.eta, z)]
 
         for fault in range(self.eta_fault.shape[0]):
             eta_temp = self.eta_fault[fault,:].repeat(self.N, 1)
-            result.append(self.forward_temp(eta_temp, z))
+            result.append(self.output_variation(eta_temp, z))
 
         output = torch.stack(result)
-        slices = [output[int(self.Mask[i]), :, :, i] for i in range(len(self.Mask))]
+        slices = [output[int(mask[i]), :, :, i] for i in range(mask.numel())]
         return torch.stack(slices, dim=2)
+    
+    def forward(self, z):
+        result = []
+        for i in range(self.Mask.shape[0]):
+            result.append(self.output_faults(z[i,:,:,:], self.Mask[i].flatten()))
+        return torch.stack(result)
     
     def UpdateArgs(self, args):
         self.args = args
@@ -211,22 +219,28 @@ class TanhRT(torch.nn.Module):
         power = power_n * (self.pow_Y_max - self.pow_Y_min) + self.pow_Y_min
         return power.mean()
 
-    def forward_temp(self, eta, z):
+    def output_variation(self, eta, z):
         a = torch.zeros_like(z)
         for i in range(self.N):
             a[i,:,:] = eta[i,0] + eta[i,1] * torch.tanh((z[i,:,:] - eta[i,2]) * eta[i,3])
         return a
     
-    def forward(self, z):
-        result = [self.forward_temp(self.eta, z)]
+    def output_faults(self, z, mask):
+        result = [self.output_variation(self.eta, z)]
 
         for fault in range(self.eta_fault.shape[0]):
             eta_temp = self.eta_fault[fault,:].repeat(self.N, 1)
-            result.append(self.forward_temp(eta_temp, z))
+            result.append(self.output_variation(eta_temp, z))
 
         output = torch.stack(result)
-        slices = [output[int(self.Mask[i]), :, :, i] for i in range(len(self.Mask))]
+        slices = [output[int(mask[i]), :, :, i] for i in range(mask.numel())]
         return torch.stack(slices, dim=2)
+    
+    def forward(self, z):
+        result = []
+        for i in range(self.Mask.shape[0]):
+            result.append(self.output_faults(z[i,:,:,:], self.Mask[i].flatten()))
+        return torch.stack(result)
     
     def UpdateArgs(self, args):
         self.args = args

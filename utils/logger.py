@@ -36,6 +36,12 @@ def GetMessageLogger(args, setup, EA_args=None):
     msglogger.info(msg)
     return msglogger
 
+def CloseLogger(msglogger):
+    for handler in msglogger.handlers:
+        msglogger.removeHandler(handler)
+        handler.close()
+    logging.shutdown()
+    
 def PrintParser(args):
     args = vars(args)
     for k, v in args.items():
