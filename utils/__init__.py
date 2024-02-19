@@ -51,9 +51,9 @@ def MakeFolder(args):
 
 def FormulateArgs(args):
     args.DEVICE = CheckDevice(args)
-    if args.e_train == 0.:
+    if args.e_train == 0. and args.dropout == 0.:
         args.N_train = 1
-    if args.e_test == 0.:
+    if args.e_test == 0. and args.dropout == 0.:
         args.N_test = 1
     if args.e_fault == 0:
         args.N_fault = 1

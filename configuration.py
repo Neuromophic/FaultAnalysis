@@ -106,6 +106,10 @@ parser.add_argument('--e_test',                type=float,     default=0.1,     
 # fault-related hyperparameters
 parser.add_argument('--e_fault',               type=int,       default=0,                     help='number of fault ')
 parser.add_argument('--N_fault',               type=int,       default=50,                    help='number of random faults sampled during training')
+parser.add_argument('--e_fault_test',          type=int,       default=0,                     help='number of fault in testing')
+parser.add_argument('--N_fault_test',          type=int,       default=50,                    help='number of random faults sampled during training in testing')
+parser.add_argument('--dropout',               type=float,     default=0.1,                   help='dropout rate')
+
 # power
 parser.add_argument('--powerestimator',        type=str,       default='none',                help='the penalty term for encouraging lower energy')
 parser.add_argument('--powerbalance',          type=float,     default=0.,                    help='the scaling term for energy vs. accuracy')

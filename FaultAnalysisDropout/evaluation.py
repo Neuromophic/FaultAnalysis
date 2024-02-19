@@ -26,7 +26,7 @@ for x,y in test_loader:
     X_test, y_test = x.to(args.DEVICE), y.to(args.DEVICE)
     
 
-if not os.path.exists(f"./evaluation/f"./evaluation/result_data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_dropout_{args.dropout}.matrix"):
+if not os.path.exists(f"./evaluation/result_data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_dropout_{args.dropout}.matrix"):
 
     N_Faults = 500
     e_faults = [0, 1, 2, 4]
@@ -44,21 +44,22 @@ if not os.path.exists(f"./evaluation/f"./evaluation/result_data_{args.DATASET:02
         j.theta_.data = i.theta_.data
                                 
 
-     
-    for e_fault in e_faults:
-        pnn.UpdateVariation(1, e_fault)
+    pnn.UpdateVariation(1, 0.)
+    for i, e_fault in enumerate(e_faults):
+        pnn.UpdateFault(1, e_fault)
+        
                                   
-        for faultsample in range(N_faults):
-                                  
+        for faultsample in range(N_Faults):
+            print(e_fault, faultsample)                      
             pred_valid = pnn(X_valid)[0,0,:,:]
             acc_valid = (torch.argmax(pred_valid, dim=1) == y_valid).sum() / y_valid.numel()   
 
-            pred_test = pnn(X_valid)[0,0,:,:]
+            pred_test = pnn(X_test)[0,0,:,:]
             acc_test = (torch.argmax(pred_test, dim=1) == y_test).sum() / y_test.numel()   
                      
             
-            results[faultsample, 0] = acc_valid
-            results[faultsample, 1] = acc_test
+            results[faultsample, i, 0] = acc_valid
+            results[faultsample, i, 1] = acc_test
                 
                             
     torch.save(results, f"./evaluation/result_data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_dropout_{args.dropout}.matrix")

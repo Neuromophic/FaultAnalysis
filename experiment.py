@@ -21,7 +21,7 @@ pprint.pprint(datainfo)
 
 SetSeed(args.SEED)
 
-setup = f"data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_faults_{args.e_fault:1d}.model"
+setup = f"data_{args.DATASET:02d}_{datainfo['dataname']}_seed_{args.SEED:02d}_epsilon_{args.e_train}_dropout_{args.dropout}.model"
 print(f'Training setup: {setup}.')
 
 msglogger = GetMessageLogger(args, setup)
